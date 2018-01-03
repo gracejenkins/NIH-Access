@@ -50,21 +50,21 @@ def compare_simulations(arrival_rates):
     
     inputs = {}
     inputs['Daily Appointments Available'] = 10
-    inputs['Days to run'] = 100
+    inputs['Days to run'] = [300]
     inputs['Warm up period'] = 30
     inputs['Non-urgent threshold method'] = 'Dynamic'
     inputs['Non-urgent threshold inputs'] = {}
-    inputs['Non-urgent threshold inputs']['Dynamic'] = 7
+    inputs['Non-urgent threshold inputs']['Dynamic'] = [10,3]
     inputs['Hold for urgent method'] = 'Dynamic'
     inputs['Hold for urgent inputs'] = {}
     inputs['Hold for urgent inputs']['Static'] = 4
-    inputs['Hold for urgent inputs']['Dynamic'] = [.1,.1] # [p,c,m,q,d]
+    inputs['Hold for urgent inputs']['Dynamic'] = [.05,.4,.8] 
     
     
     for arrival_rate in arrival_rates:
         
-        inputs['Urgent rate'] = arrival_rate[0]
-        inputs['Non-urgent rate'] = arrival_rate[1]
+        inputs['Urgent rates'] = arrival_rate[0]
+        inputs['Non-urgent rates'] = arrival_rate[1]
         
             
         total_demand = create_total_demand(inputs)
@@ -122,8 +122,8 @@ def compare_thresholding(thresholds):
 
 
 ### COMPARE SIMULATIONS ###
-#arrival_rates = [[5,5],[3,7],[7,3],[5,6],[3,8],[8,3],[4,5],[3,6],[6,3]]
-#compare_simulations(arrival_rates)
+arrival_rates = [[[5],[5]],[[3],[7]],[[7],[3]],[[5],[6]],[[3],[8]],[[8],[3]],[[4],[5]],[[3],[6]],[[6],[3]]]
+compare_simulations(arrival_rates)
 
 
 ### COMPARE HOLDING METHODS ###
@@ -132,7 +132,7 @@ def compare_thresholding(thresholds):
 #compare_holding(static_parameters, dynamic_parameters)
 
 ### COMPARE THRESHOLDING METHODS ###
-thresholds = [7,10,14,20,30]
-compare_thresholding(thresholds)
+#thresholds = [7,10,14,20,30]
+#compare_thresholding(thresholds)
 
     

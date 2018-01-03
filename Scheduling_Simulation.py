@@ -10,8 +10,12 @@ import numpy as np
 import random
 import matplotlib.pyplot as plt
 from math import pi 
+import sys
 
 ### The simulation ###
+
+sys.setrecursionlimit(1500)
+
 
 class Patient:
 
@@ -45,6 +49,7 @@ def initialize_schedule(days_to_run, inputs):
     return schedule
 
 def add_days(up_to_day,inputs):
+    """ If the current schedule does not include days far enough in the future, adds days to the schedule"""
     
     global schedule 
     
@@ -61,15 +66,15 @@ def initilize_outputs():
     return outputs
     
 
-def create_demand(day, inputs):
+def create_demand(day, inputs, urgent_rate, nonurgent_rate):
     """ Given arrival rates for urgent and non urgent patients, creates demand 
     for urgent and non-urgent arrivals. Returns a list of patients to be assigned 
     appointments."""
     
     global outputs
     
-    urgent_demand = np.random.poisson(inputs['Urgent rate'])
-    nonurgent_demand = np.random.poisson(inputs['Non-urgent rate'])
+    urgent_demand = np.random.poisson(urgent_rate)
+    nonurgent_demand = np.random.poisson(nonurgent_rate)
     
     incoming_demand = []
     
@@ -90,13 +95,29 @@ def create_total_demand(inputs):
     same demand can be used"""
     
     total_demand = []
+    urgent_rate = inputs['Urgent rates'][0]
+    nonurgent_rate = inputs['Non-urgent rates'][0]
     
-    for day in range(inputs["Days to run"]+inputs['Warm up period']):
-        total_demand += [create_demand(day, inputs)]
+    for day in range(inputs['Warm up period']):
+        total_demand += [create_demand(day, inputs, urgent_rate, nonurgent_rate)]
+    
+    prev_days = inputs['Warm up period']
+    
+    for iteration in range(len(inputs['Days to run'])):
+        period_len = inputs['Days to run'][iteration]
+        urgent_rate = inputs['Urgent rates'][iteration]
+        nonurgent_rate = inputs['Non-urgent rates'][iteration]
+        
+        for day in range(period_len):   
+            total_demand += [create_demand(day+prev_days, inputs, urgent_rate, nonurgent_rate)]
+        
+        prev_days += period_len
         
     return total_demand 
 
 def get_current_urgent_waittimes(inputs,total_demand):
+    """ For dynamic adjustments the current average urgent waittimes of patients
+    over the last 3 days is calculated. """
     
     global DAY
     
@@ -118,6 +139,10 @@ def get_current_urgent_waittimes(inputs,total_demand):
     return avg_urgent_waittimes
     
 def hold_appointments(day, inputs,total_demand):
+    """ Based on user inputs (static or dynamic system and the parameters), 
+    calculates the number of appointments that should be held for urgent patients. 
+    If it is a dynamic system, this is based on the number of days out and the 
+    current average urgent wait times. """
     
     global DAY
     
@@ -130,17 +155,21 @@ def hold_appointments(day, inputs,total_demand):
     
     w_daysout = inputs['Hold for urgent inputs']['Dynamic'][0]
     w_urgwait = inputs['Hold for urgent inputs']['Dynamic'][1]
+    max_prop = inputs['Hold for urgent inputs']['Dynamic'][2]
     
     proportion_to_hold = (2/pi)*(np.arctan(days_out*w_daysout) + np.arctan(avg_urgent_waittimes*w_urgwait))
     
-    if proportion_to_hold > 1: 
-        proportion_to_hold = .7
+    if proportion_to_hold > max_prop: 
+        proportion_to_hold = max_prop
     
     number_to_hold = round(inputs['Daily Appointments Available']*proportion_to_hold)
     
     return number_to_hold
     
 def nonurgent_threshold(inputs, total_demand):
+    """ Based on user inputs (static or dynamic and parameters), calculates the
+    non-urgent threshold. If the system is dynamic, it is based on an intercept 
+    threshold and the current average waittimes multiplied by a slope."""
     
     global outputs
     
@@ -195,6 +224,9 @@ def schedule_appointment(patient, day, inputs, total_demand, direction = 'Forwar
         
 def assign_appointments_classic(incoming_demand,day,inputs, total_demand):
     
+    """ Assigns appointments by first come, first serve. Does not distinguish between
+    urgent and non-urgent patients. """
+    
     global schedule, outputs
     
     for patient in incoming_demand:
@@ -211,6 +243,9 @@ def assign_appointments_classic(incoming_demand,day,inputs, total_demand):
             
 
 def assign_appointments_rolling(incoming_demand, day, inputs, total_demand):
+    
+    """ Assigns urgent patients first come, first serve as soon as possible. 
+    Assigns non-urgent patients forward after """
     
     global schedule, outputs
     
@@ -256,10 +291,10 @@ def run_simulation(simulation_type, inputs, total_demand):
     global DAY, schedule, outputs
     
     DAY = 0
-    schedule = initialize_schedule(inputs['Days to run']+inputs['Warm up period'],inputs)
+    schedule = initialize_schedule(sum(inputs['Days to run'])+inputs['Warm up period'],inputs)
     outputs = initilize_outputs()
     
-    for interation in range(inputs['Days to run']+inputs['Warm up period']):
+    for iteration in range(sum(inputs['Days to run'])+inputs['Warm up period']):
         incoming_demand = total_demand[DAY]
         if simulation_type == "Classic":
             assign_appointments_classic(incoming_demand, DAY, inputs, total_demand)
@@ -373,22 +408,22 @@ if __name__ == "__main__":
     # inputs
     inputs = {}
     inputs['Daily Appointments Available'] = 10
-    inputs['Days to run'] = 300
     inputs['Warm up period'] = 30
-    inputs['Urgent rate'] = 3
-    inputs['Non-urgent rate'] = 7
+    inputs['Days to run'] = [100, 100, 100, 100] # for each arrival rate
+    inputs['Urgent rates'] = [7,8,6,7]
+    inputs['Non-urgent rates'] = [3,4,2,3]
     
     inputs['Hold for urgent method'] = 'Dynamic'
     inputs['Hold for urgent inputs'] = {}
     # number of appointments to hold in the case of static holding 
-    inputs['Hold for urgent inputs']['Static'] = 0
+    inputs['Hold for urgent inputs']['Static'] = 6
     # p, c, m, q and d   parameters in the case of dynamic holding
-    inputs['Hold for urgent inputs']['Dynamic'] = [.03,.5] # days out parameter, urgent waittime parameter
+    inputs['Hold for urgent inputs']['Dynamic'] = [.05,.4, .8] # days out parameter, urgent waittime parameter, max proportion
     
     inputs['Non-urgent threshold method'] = 'Dynamic'
     inputs['Non-urgent threshold inputs'] = {} 
     inputs['Non-urgent threshold inputs']['Static'] = 14
-    inputs['Non-urgent threshold inputs']['Dynamic'] = [14,2] # the intercept
+    inputs['Non-urgent threshold inputs']['Dynamic'] = [10,2] # intercept, slope
     
     
     total_demand = create_total_demand(inputs)
