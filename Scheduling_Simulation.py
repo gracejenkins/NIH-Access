@@ -245,7 +245,7 @@ def assign_appointments_classic(incoming_demand,day,inputs, total_demand):
 def assign_appointments_rolling(incoming_demand, day, inputs, total_demand):
     
     """ Assigns urgent patients first come, first serve as soon as possible. 
-    Assigns non-urgent patients forward after """
+    Assigns non-urgent patients forward after threshold"""
     
     global schedule, outputs
     
@@ -262,6 +262,10 @@ def assign_appointments_rolling(incoming_demand, day, inputs, total_demand):
                 outputs['Non-urgent Wait Times'] += [patient.waittime]
         
 def assign_appointments_milk(incoming_demand, day, inputs, total_demand):
+    
+    """ Assigns urgent patients first come, first serve as soon as possible. 
+    Assigns non-urgent patients backward after threshold. If no appointments are
+    found, goes forward form threshold."""
     
     global schedule, outputs
     
@@ -319,7 +323,8 @@ def create_plot(variable, title_, xlabel_, ylabel_):
     
     return figure
 
-def waittimes_by_day(title, inputs, total_demand):
+def waittimes_by_day(inputs, total_demand):
+    """ Calculates average wait times by day of arrival"""
     
     
     urgent_avg_waittimes = []
@@ -342,21 +347,24 @@ def waittimes_by_day(title, inputs, total_demand):
         except:
             nonurgent_avg_waittimes += [None]   
         
-    plt.figure()
-    urgent, = plt.plot(urgent_avg_waittimes, label = "Urgent Avg. Wait Time")
-    nonurgent, = plt.plot(nonurgent_avg_waittimes, label = "Non-Urgent Avg. Wait Time")
-    plt.legend(handles = [urgent, nonurgent])
-    plt.xlabel("Days")
-    plt.title(title + " Average Wait Time by Day")
+    return urgent_avg_waittimes, nonurgent_avg_waittimes
+
+def get_max_y(results_list):
     
-def demand_by_type(inputs):
+    nonurgent_max = 0
+    for results in results_list:
+        list_max = max(x for x in results['Non-urgent by day'] if x is not None)
+        nonurgent_max = max(list_max,nonurgent_max)
+        
+    return nonurgent_max
     
-    global total_demand
-    
+def demand_by_type(inputs, total_demand):
+    """ Calculates demand arrived by type, plots. """
+
     urgent_demand = []
     nonurgent_demand = []
     
-    for day in range(inputs['Warm up period'], inputs['Days to run']+inputs['Warm up period']):
+    for day in range(inputs['Warm up period'], sum(inputs['Days to run'])+inputs['Warm up period']):
         urgents = 0; nonurgents = 0;
         for patient in total_demand[day]:
             if patient.type == "urgent":
@@ -374,15 +382,22 @@ def demand_by_type(inputs):
     plt.title("Demand by Patient Type")
 
     
-def plot_results(title,inputs,total_demand):
+def plot_results(title, results, ymax):
     
-    global outputs
+    #global outputs
     
     #create_plot(outputs["Urgent Wait Times"], title + " Urgent Wait Times","Patient","Days")
     #create_plot(outputs["Non-urgent Wait Times"], title + " Non-urgent Wait Times","Patient","Days")
     #create_plot(outputs["Unused Appointments"], title + " Unused Appointments","Day","Unused Appts.")
-    waittimes_by_day(title, inputs, total_demand)
-    
+    urgent_avg_waittimes = results['Urgent by day']
+    nonurgent_avg_waittimes = results['Non-urgent by day']
+    plt.figure()
+    urgent, = plt.plot(urgent_avg_waittimes, label = "Urgent Avg. Wait Time")
+    nonurgent, = plt.plot(nonurgent_avg_waittimes, label = "Non-Urgent Avg. Wait Time")
+    plt.legend(handles = [urgent, nonurgent])
+    plt.xlabel("Days")
+    plt.title(title + " Average Wait Time by Day")
+    plt.ylim(ymax = ymax)
     
 def summarize_results(inputs, total_demand):
     
@@ -395,7 +410,10 @@ def summarize_results(inputs, total_demand):
     results['Total Patients Arrived'] = sum(len(day) for day in total_demand[inputs['Warm up period']:])
     print(results)
     
+    urgent_avg_waittimes, nonurgent_avg_waittimes = waittimes_by_day(inputs, total_demand)
     # store other results, not to be printed 
+    results['Urgent by day'] = urgent_avg_waittimes
+    results['Non-urgent by day'] = nonurgent_avg_waittimes
     results['Urgent Wait Times'] = outputs['Urgent Wait Times'] 
     results['Non-urgent Wait Times'] = outputs['Non-urgent Wait Times'] 
     results['Unused Appointments'] = outputs['Unused Appointments'] 
@@ -410,8 +428,8 @@ if __name__ == "__main__":
     inputs['Daily Appointments Available'] = 10
     inputs['Warm up period'] = 30
     inputs['Days to run'] = [100, 100, 100, 100] # for each arrival rate
-    inputs['Urgent rates'] = [7,8,6,7]
-    inputs['Non-urgent rates'] = [3,4,2,3]
+    inputs['Urgent rates'] = [5,6,4,5]
+    inputs['Non-urgent rates'] = [5,6,4,5]
     
     inputs['Hold for urgent method'] = 'Dynamic'
     inputs['Hold for urgent inputs'] = {}
@@ -427,22 +445,25 @@ if __name__ == "__main__":
     
     
     total_demand = create_total_demand(inputs)
+    demand_by_type(inputs, total_demand)
     
     # Run classic, first come first serve simulation
     run_simulation("Classic", inputs, total_demand)
-    plot_results("Classic", inputs, total_demand)
     print("Classic")
     classic_results = summarize_results(inputs, total_demand)
     
     #Run rolling horizon threshold simulation 
     run_simulation("Rolling Horizon", inputs, total_demand)
-    plot_results("Rolling Horizon", inputs, total_demand)
     print("Rolling Horizon")
     rolling_results = summarize_results(inputs, total_demand)
     
     # Run milk carton threshold simulation
     run_simulation("Milk Carton", inputs, total_demand)
-    plot_results("Milk Carton", inputs, total_demand)
     print("Milk Carton")
     milk_results = summarize_results(inputs, total_demand)
+    
+    ymax = get_max_y([classic_results, rolling_results, milk_results])
+    plot_results("Classic",classic_results,ymax=None)
+    plot_results("Rolling Horizon",rolling_results,ymax)
+    plot_results("Milk Carton",milk_results,ymax)
     
